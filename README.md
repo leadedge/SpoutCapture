@@ -5,6 +5,6 @@ https://docs.microsoft.com/en-us/windows/win32/api/dxgi1_2/nf-dxgi1_2-idxgioutpu
 
 The project depends on :  
 * ofxWinMenu - https://github.com/leadedge/ofxWinMenu  
-* Spout 2.007 beta - https://github.com/leadedge/Spout2/tree/beta
+* Spout 2.007 - https://github.com/leadedge/Spout2/
 
 The project files are for Visual Studio 2017

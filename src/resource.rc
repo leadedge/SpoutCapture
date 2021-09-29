@@ -53,12 +53,12 @@ VS_VERSION_INFO VERSIONINFO
         {
             VALUE "CompanyName", "Leading Edge Pty Ltd\0"
             VALUE "FileDescription", "SpoutCapture\0"
-            VALUE "FileVersion", "1.000\0"
+            VALUE "FileVersion", "1.001\0"
             VALUE "InternalName", "SpoutCapture\0"
-            VALUE "LegalCopyright", "Copyright \251 Leading Edge Pty Ltd 2019\0"
+            VALUE "LegalCopyright", "Copyright \251 Leading Edge Pty Ltd 2019-2021\0"
             VALUE "OriginalFilename", "SpoutCapture.exe\0"
             VALUE "ProductName", "SpoutCapture\0"
-            VALUE "ProductVersion", "1.000\0"
+            VALUE "ProductVersion", "1.001\0"
         }
     }
     BLOCK "VarFileInfo"

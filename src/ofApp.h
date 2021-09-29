@@ -3,7 +3,7 @@
 #include "ofMain.h"
 #include "resource.h"
 #include "ofxWinMenu.h" // Addon for a windows menu
-#include "..\apps\SpoutSDK\Spout.h" // Spout 2.007 beta (subject to change)
+#include "..\apps\SpoutGL\SpoutSender.h" // Spout 2.007 beta (subject to change)
 #include <dxgi1_2.h> // Desktop Duplication
 
 class ofApp : public ofBaseApp {
@@ -49,6 +49,7 @@ public:
 	bool capture_desktop();
 
 	// Flags
+	bool bInitialized = false;
 	bool bDesktop = true;
 	bool bResized = false;
 

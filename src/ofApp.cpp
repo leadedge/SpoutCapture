@@ -5,8 +5,9 @@
 //	Send the desktop and the part beneath the app window
 //
 //	SpoutCapture is Licensed with the LGPL3 license.
-//	Copyright(C) 2019. Lynn Jarvis.
-//	http://spout.zeal.co/
+//	Copyright(C) 2019-2021. Lynn Jarvis.
+//
+//	https://spout.zeal.co/
 //
 // -----------------------------------------------------------------------------------------
 // This program is free software : you can redistribute it and/or modify it under the terms
@@ -21,6 +22,8 @@
 //
 //	13/10/19	- Initial release 1.000
 //				  VS2017 /MD Win32
+//	29/09/21	- Update for 2.007 SpoutGL
+//				  Version 1.001
 
 #include "ofApp.h"
 
@@ -29,8 +32,11 @@ INT_PTR CALLBACK About(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
 //--------------------------------------------------------------
 void ofApp::setup() {
 
+	// For debugging
+	// OpenSpoutConsole(); // empty console
+	// EnableSpoutLog(); // Error messages
 	// Enable a log file in ..\AppData\Roaming\Spout
-	EnableSpoutLogFile("SpoutCapture");
+	// EnableSpoutLogFile("SpoutCapture");
 
 	// Create a transparent window
 	// https://stackoverflow.com/questions/3970066/creating-a-transparent-window-in-c-win32
@@ -91,8 +97,8 @@ void ofApp::setup() {
 	//
 	hPopup = menu->AddPopupMenu(hMenu, "Window");
 	// Show the entire desktop
-	bDesktop = false;
-	menu->AddPopupItem(hPopup, "Show desktop", false); // Checked and auto-check
+	bDesktop = true;
+	menu->AddPopupItem(hPopup, "Desktop", true); // Checked and auto-check
 	// Topmost
 	bTopmost = false;
 	menu->AddPopupItem(hPopup, "Show on top", false); // Not checked and auto-check
@@ -108,8 +114,8 @@ void ofApp::setup() {
 	menu->SetWindowMenu();
 
 	// Initialize for DirectX11 now which creates a Direct3D 11 device.
-	desktopSender.spout.SetDX9(false); // Set this here because DX9 won't work
-	if (!desktopSender.spout.interop.OpenDirectX11()) {
+	desktopSender.SetDX9(false); // Set this here because DX9 won't work
+	if (!desktopSender.spout.OpenDirectX11()) {
 		MessageBoxA(NULL, "OpenDX11 failed", "Info", MB_OK);
 		return;
 	}
@@ -117,7 +123,7 @@ void ofApp::setup() {
 	// Get the Spout DX11 device to create the resources
 	// The device may have been created as Direct3D 11.0
 	// and not 11.1, but it still seems to work OK
-	g_d3dDevice = desktopSender.spout.interop.g_pd3dDevice;
+	g_d3dDevice = desktopSender.spout.GetDX11Device();
 
 	// Setup Desktop duplication which establishes monitorWidth and monitorHeight
 	if (!setupDesktopDuplication()) {
@@ -130,21 +136,16 @@ void ofApp::setup() {
 	// the Spout shared texture and is also the format of the desktop image
 	// no matter what the current display mode is. 
 	// Use a Spout function - the texture is shareable but that has no effect
-	desktopSender.spout.interop.spoutdx.CreateSharedDX11Texture(g_d3dDevice,
+	desktopSender.spout.spoutdx.CreateSharedDX11Texture(g_d3dDevice,
 		monitorWidth, monitorHeight,
 		DXGI_FORMAT_B8G8R8A8_UNORM, &g_pDeskTexture, g_hSharehandle);
 
 	// Allocate a readback OpenGL texture for the desktop
 	desktopTexture.allocate(monitorWidth, monitorHeight, GL_RGBA);
 
-	// Create a desktop sender so that receivers can access the entire desktop
-	desktopSender.SetupSender("SpoutDesktop", monitorWidth, monitorHeight);
-
-	// Create a sender the size of the OF window
-	// to send the part of the desktop under the window
+	// Set the size of the OF window for the part of the desktop under the window
 	windowWidth = (unsigned int)ofGetWidth();
 	windowHeight = (unsigned int)ofGetHeight();
-	windowSender.SetupSender("SpoutWindow", windowWidth, windowHeight);
 
 	// Fbo for crop of the desktop texture to the window size
 	windowFbo.allocate(windowWidth, windowHeight, GL_RGBA);
@@ -244,13 +245,12 @@ bool ofApp::capture_desktop() {
 	DesktopResource->Release();
 	DesktopResource = NULL;
 
-	// Send the DX11 texture from the desktop resource
-	// to the Spout desktop sender and at the same time
-	// read back the linked OpenGL texture for the window sender
-	desktopSender.spout.interop.WriteTextureReadback(&g_pDeskTexture,
+	// Send the DX11 texture from the desktop resource and at the same
+	// time read back the linked OpenGL texture for the window sender
+	desktopSender.spout.WriteTextureReadback(&g_pDeskTexture,
 		desktopTexture.getTextureData().textureID,
 		desktopTexture.getTextureData().textureTarget,
-		monitorWidth, monitorHeight);
+		monitorWidth, monitorHeight, false);
 
 	// Release the frame for the next round
 	g_deskDupl->ReleaseFrame();
@@ -272,26 +272,33 @@ void ofApp::exit() {
 //--------------------------------------------------------------
 void ofApp::update() {
 
-	// Capture the desktop
+	if (!bInitialized) {
+		// Create the window sender first so that the desktop sender is set as active
+		windowSender.CreateSender("WindowSender", ofGetWidth(), ofGetHeight());
+		// This sets up the interop device and object for WriteTextureReadBack to use
+		desktopSender.CreateSender("DesktopSender", ofGetScreenWidth(), ofGetScreenHeight());
+		bInitialized = true;
+	}
+
+	// Capture using the desktop duplication method
 	capture_desktop();
+
 }
 
 //--------------------------------------------------------------
 void ofApp::draw() {
 
 	if (bDesktop) {
-		
 		//
-		// Desktop mode - show the entire desktop
-		// The desktop texture is already transferred
-		// to the desktop sender by capture_desktop
+		// Desktop mode
 		//
-
+		// Draw the entire desktop
+		// The texture is already sent by capture_desktop
+		//
 		// Black background is opaque
 		ofBackground(0, 0, 0, 255);
 		// Draw the desktop texture
 		desktopTexture.draw(0, 0, ofGetWidth(), ofGetHeight());
-
 	}
 	else if (!IsIconic(g_hWnd))	{ // do not process if Iconic
 
@@ -300,8 +307,7 @@ void ofApp::draw() {
 		//
 
 		if (bResized) {
-			// Resize the window sender and sending fbo
-			windowSender.UpdateSender("SpoutWindow", windowWidth, windowHeight);
+			// Resize the window sender fbo
 			windowFbo.allocate(windowWidth, windowHeight, GL_RGBA);
 			bResized = false;
 		}
@@ -309,9 +315,8 @@ void ofApp::draw() {
 		// Red background becomes transparent
 		ofBackground(255, 0, 0, 255);
 
-		// Draw a portion of the total screen capture
-		// to the window sender OpenGL texture via FBO
-		// Sender width and height mirror the ofApp window
+		// Draw a portion of the readback texture to the window sender fbo.
+		// Sender width and height mirror the ofApp window.
 		ofSetColor(255);
 		windowFbo.bind();
 		desktopTexture.drawSubsection(0, 0,
@@ -319,12 +324,11 @@ void ofApp::draw() {
 			(float)ofGetHeight(),
 			(float)ofGetWindowPositionX(), // position to crop at
 			(float)ofGetWindowPositionY());
+
+		// Send the window fbo
+		windowSender.SendFbo(windowFbo.getId(), windowFbo.getWidth(), windowFbo.getHeight());
+
 		windowFbo.unbind();
-
-		// Send the window fbo texture
-		windowSender.SendTextureData(windowFbo.getTexture().getTextureData().textureID,
-			windowFbo.getTexture().getTextureData().textureTarget);
-
 	}
 
 }
@@ -373,7 +377,7 @@ void ofApp::appMenuFunction(string title, bool bChecked) {
 	// Window menu
 	//
 
-	if (title == "Show desktop") {
+	if (title == "Desktop") {
 
 		bDesktop = bChecked;
 		HWND hwnd = ofGetWin32Window();
@@ -382,12 +386,15 @@ void ofApp::appMenuFunction(string title, bool bChecked) {
 			dwStyle ^= WS_EX_LAYERED;
 			SetWindowLong(hwnd, GWL_EXSTYLE, dwStyle);
 			SetLayeredWindowAttributes(hwnd, RGB(0, 0, 0), 255, LWA_COLORKEY);
-
+			// Set desktop sender active
+			desktopSender.SetActiveSender("DesktopSender");
 		}
 		else {
 			SetWindowLong(hwnd, GWL_EXSTYLE, GetWindowLong(hwnd, GWL_EXSTYLE) | WS_EX_LAYERED);
 			// Make red pixels transparent:
 			SetLayeredWindowAttributes(hwnd, RGB(255, 0, 0), 0, LWA_COLORKEY);
+			// Set window sender active
+			desktopSender.SetActiveSender("WindowSender");
 		}
 	}
 
