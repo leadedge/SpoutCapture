@@ -7,4 +7,6 @@ The project depends on :
 * ofxWinMenu - https://github.com/leadedge/ofxWinMenu  
 * Spout 2.007 - https://github.com/leadedge/Spout2/
 
+The project has been built with Openframeworks 0.10.0
+
 The project files are for Visual Studio 2017
