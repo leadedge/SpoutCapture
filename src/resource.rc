@@ -15,15 +15,16 @@
 // About
 //
 LANGUAGE LANG_NEUTRAL, SUBLANG_NEUTRAL
-IDD_ABOUTBOX DIALOG 0, 0, 186, 112
+IDD_ABOUTBOX DIALOG 0, 0, 186, 126
 STYLE DS_3DLOOK | DS_CENTER | DS_MODALFRAME | DS_SHELLFONT | WS_CAPTION | WS_VISIBLE | WS_POPUP | WS_SYSMENU
 CAPTION "About"
 FONT 8, "Ms Shell Dlg"
 {
 	ICON IDI_ICON1, IDC_STATIC, 6, 4, 16, 16, SS_ICON
-	LTEXT           "", IDC_ABOUT_TEXT, 44, 10, 136, 112, SS_LEFT, WS_EX_LEFT
-	CONTROL         "", IDC_SPOUT_URL, WC_BUTTON, BS_OWNERDRAW | BS_FLAT, 56, 22, 66, 10, WS_EX_TRANSPARENT
-	DEFPUSHBUTTON   "OK", IDOK, 65, 90, 50, 14, 0, WS_EX_LEFT
+	LTEXT           "", IDC_ABOUT_TEXT, 44, 8, 136, 112, SS_LEFT, WS_EX_LEFT
+	CONTROL         "", IDC_SPOUT_URL, WC_BUTTON, BS_OWNERDRAW | BS_FLAT, 56, 20, 66, 10, WS_EX_TRANSPARENT
+
+	DEFPUSHBUTTON   "OK", IDOK, 65, 104, 50, 14, 0, WS_EX_LEFT
 }
 
 
@@ -39,8 +40,8 @@ IDI_ICON1          ICON           ".\\Spout.ico"
 //
 LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_US
 VS_VERSION_INFO VERSIONINFO
-    FILEVERSION     1,0,0,0
-    PRODUCTVERSION  1,0,0,0
+    FILEVERSION     2,0,0,0
+    PRODUCTVERSION  2,0,0,0
     FILEOS          VOS_NT
     FILETYPE        VFT_APP
     FILESUBTYPE     VFT2_UNKNOWN
@@ -53,12 +54,12 @@ VS_VERSION_INFO VERSIONINFO
         {
             VALUE "CompanyName", "Leading Edge Pty Ltd\0"
             VALUE "FileDescription", "SpoutCapture\0"
-            VALUE "FileVersion", "1.001\0"
+            VALUE "FileVersion", "2.000\0"
             VALUE "InternalName", "SpoutCapture\0"
             VALUE "LegalCopyright", "Copyright \251 Leading Edge Pty Ltd 2019-2021\0"
             VALUE "OriginalFilename", "SpoutCapture.exe\0"
             VALUE "ProductName", "SpoutCapture\0"
-            VALUE "ProductVersion", "1.001\0"
+            VALUE "ProductVersion", "2.000\0"
         }
     }
     BLOCK "VarFileInfo"

@@ -19,17 +19,27 @@ public:
 	// Desktop sender
 	SpoutSender desktopSender;
 
-	// Desktop readback texture
-	ofTexture desktopTexture;
-
 	// Window sender
 	SpoutSender windowSender;
 	unsigned int windowWidth = 0;
 	unsigned int windowHeight = 0;
+	unsigned char * windowBuffer = nullptr;
+
+	// Application window position
+	int positionTop = 0;
+	int positionLeft = 0;
+
+	// Window texture and fbo
+	ofTexture windowTexture;
 	ofFbo windowFbo;
 
+	// Desktop readback texture
+	ofTexture desktopTexture;
+
+	// Screen draw font
+	ofTrueTypeFont myFont;
+
 	// Menu
-	HWND g_hWnd = NULL;
 	HWND g_hwndForeground = NULL;
 	HINSTANCE g_hInstance = NULL;
 	ofxWinMenu * menu;
@@ -47,10 +57,19 @@ public:
 	unsigned int monitorHeight = 0;
 	bool setupDesktopDuplication();
 	bool capture_desktop();
+	
+	// GDI capture
+	HDC hWindowDC;
+	HDC hWindowMemDC;
+	HBITMAP hWindowBitmap;
+	HBITMAP hWindowOld;
+	bool capture_window(HWND hwnd);
 
 	// Flags
 	bool bInitialized = false;
 	bool bDesktop = true;
+	bool bRegion = false;
+	bool bWindow = false;
 	bool bResized = false;
 
 };
