@@ -5,6 +5,12 @@ An Openframeworks screen capture application for Microsoft Windows.
 - Captures the region of the desktop under the application window.
 - Captures individual windows using [GDI](https://docs.microsoft.com/en-us/windows/win32/gdi/windows-gdi).
 
+Two Spout senders are created, one for the entire desktop and one for the selected region or 
+application window. A region of interest is always part of the “visible” desktop, so can be obscured by other windows.
+A window capture is independent and the selected application can be obscured without affecting the capture.
+The capture will continue if SpoutCapture is minimized. This can result in improved frame rate for 
+window capture. Details can be found in SpoutCapture.pdf. Download the package from releases.
+
 The project depends on :  
 * ofxWinMenu - https://github.com/leadedge/ofxWinMenu  
 * Spout 2.007 - https://github.com/leadedge/Spout2/
