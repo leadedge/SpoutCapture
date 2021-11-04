@@ -71,5 +71,6 @@ public:
 	bool bRegion = false;
 	bool bWindow = false;
 	bool bResized = false;
+	bool bShowfps = false;
 
 };

@@ -26,6 +26,8 @@
 //				  Version 1.001
 //	30.09.21	- Add GDI window capture and other improvements
 //				  Version 2.000
+//	04.11.21	- Test for duplication failure and retry
+//				  Version 2.001
 //
 
 #include "ofApp.h"
@@ -38,7 +40,6 @@ static int xCoord = 0;
 static int yCoord = 0;
 static HWND windowHwnd = NULL; // Window to capture
 static HWND g_hWnd = NULL; // Application window
-
 
 INT_PTR CALLBACK About(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
 
@@ -105,6 +106,7 @@ void ofApp::setup() {
 	menu->AddPopupItem(hPopup, "Region", false); // Not checked and auto-check
 	menu->AddPopupItem(hPopup, "Window", false); // Not checked and auto-check
 	menu->AddPopupSeparator(hPopup);
+	menu->AddPopupItem(hPopup, "Show fps", false); // Not checked and auto-check
 	menu->AddPopupItem(hPopup, "Show on top", false); // Not checked and auto-check
 	bDesktop = true;
 	bRegion = false;
@@ -176,10 +178,6 @@ void ofApp::setup() {
 	// Load a font rather than the default
 	if (!myFont.load("fonts/DejaVuSansCondensed-Bold.ttf", 14, true, true))
 		printf("ofApp error - Font not loaded\n");
-
-	// mouse hook
-	// if (!g_hMouseHook == NULL) g_hMouseHook = SetWindowsHookEx(WH_MOUSE_LL, LowLevelMouseProc, NULL, 0);
-
 }
 
 bool ofApp::setupDesktopDuplication() {
@@ -191,8 +189,10 @@ bool ofApp::setupDesktopDuplication() {
 	IDXGIAdapter1* adapter = NULL;
 	HRESULT hr = NULL;
 
-	if (!g_d3dDevice)
+	if (!g_d3dDevice) {
+		// printf("setupDesktopDuplication : no device\n");
 		return false;
+	}
 
 	g_d3dDevice->GetImmediateContext(&g_d3dDeviceContext);
 
@@ -224,6 +224,7 @@ bool ofApp::setupDesktopDuplication() {
 				hr = output1->DuplicateOutput(g_d3dDevice, &g_deskDupl);
 				/// https://msdn.microsoft.com/en-gb/library/windows/desktop/hh404600(v=vs.85).aspx
 				if (FAILED(hr)) {
+					printf("setupDesktopDuplication : DuplicateOutput failed\n");
 					output->Release();
 					adapter->Release();
 					factory->Release();
@@ -255,8 +256,13 @@ bool ofApp::capture_desktop() {
 	IDXGIResource* DesktopResource = NULL;
 	DXGI_OUTDUPL_FRAME_INFO FrameInfo;
 
-	if (g_deskDupl == NULL)
-		return false;
+	// Allow for UAC disabling desktop duplication
+	if (g_deskDupl == NULL) {
+		if (!setupDesktopDuplication()) {
+			return false;
+		}
+		return true; // skip this frame
+	}
 
 	// Get new frame
 	hr = g_deskDupl->AcquireNextFrame(500, &FrameInfo, &DesktopResource);
@@ -264,10 +270,27 @@ bool ofApp::capture_desktop() {
 		if ((hr != DXGI_ERROR_ACCESS_LOST) && (hr != DXGI_ERROR_WAIT_TIMEOUT)) {
 			printf("Failed to acquire next frame in DUPLICATIONMANAGER\n");
 		}
+		else if(hr == DXGI_ERROR_ACCESS_LOST) {
+			// DXGI_ERROR_ACCESS_LOST if the desktop duplication interface is invalid.
+			// The desktop duplication interface typically becomes invalid when a
+			// different type of image is displayed on the desktop.
+			// Examples of this situation are:
+			//		Desktop switch
+			//		Mode change
+			//		Switch from DWM on, DWM off, or other full - screen application
+			// In this situation, the application must release the IDXGIOutputDuplication interface
+			// and create a new IDXGIOutputDuplication for the new content.
+			g_deskDupl->Release();
+			g_deskDupl = NULL;
+
+			printf("Acquire fail (0x%7X)\n", hr);
+		}
 		return false;
 	}
 
 	// Query Interface for the texture from the desktop resource
+	// The format of the desktop image is always DXGI_FORMAT_B8G8R8A8_UNORM
+	// no matter what the current display mode is.
 	hr = DesktopResource->QueryInterface(__uuidof(ID3D11Texture2D),
 		reinterpret_cast<void **>(&g_pDeskTexture));
 
@@ -275,12 +298,14 @@ bool ofApp::capture_desktop() {
 	DesktopResource->Release();
 	DesktopResource = NULL;
 
-	// Send the DX11 texture from the desktop resource and at the same
-	// time read back the linked OpenGL texture for the window sender
-	desktopSender.spout.WriteTextureReadback(&g_pDeskTexture,
-		desktopTexture.getTextureData().textureID,
-		desktopTexture.getTextureData().textureTarget,
-		monitorWidth, monitorHeight, false);
+	if (hr == S_OK) {
+		// Send the DX11 texture from the desktop resource and at the same
+		// time read back the linked OpenGL texture for the window sender
+		desktopSender.spout.WriteTextureReadback(&g_pDeskTexture,
+			desktopTexture.getTextureData().textureID,
+			desktopTexture.getTextureData().textureTarget,
+			monitorWidth, monitorHeight, false);
+	}
 
 	// Release the frame for the next round
 	g_deskDupl->ReleaseFrame();
@@ -323,17 +348,19 @@ bool ofApp::capture_window(HWND hwnd)
 //--------------------------------------------------------------
 void ofApp::exit() {
 
-	if (g_pDeskTexture) 
-		g_pDeskTexture->Release();
 	desktopSender.ReleaseSender();
 	windowSender.ReleaseSender();
-	if(g_hMouseHook) UnhookWindowsHookEx(g_hMouseHook);
+	if (g_pDeskTexture)
+		g_pDeskTexture->Release();
+	if(g_hMouseHook)
+		UnhookWindowsHookEx(g_hMouseHook);
 
 }
 
 //--------------------------------------------------------------
 void ofApp::update() {
 
+	
 	if (!bInitialized) {
 		// Create the window sender first so that the desktop sender is set as active
 		windowSender.CreateSender("WindowSender", ofGetWidth(), ofGetHeight());
@@ -343,10 +370,10 @@ void ofApp::update() {
 	}
 
 
-
-	// Always capture using the desktop duplication method
-	// The desktop texture is sent by capture_desktop and
-	// allows the desktop sender to be drawn to fbo for sending
+	// Always capture using the desktop duplication method.
+	// The DirectX desktop texture is sent by capture_desktop().
+	// A readback texture allows the desktop to be drawn
+	// and a portion of it drawn to fbo for region capture.
 	capture_desktop();
 
 	if (bRegion) {
@@ -506,6 +533,15 @@ void ofApp::draw() {
 		ofBackground(255, 0, 0, 255);
 	}
 
+	// Capture frame rate display
+	if (bShowfps) {
+		char tmp[64];
+		ofSetColor(255, 255, 0);
+		sprintf_s(tmp, 64, "Fps - %d", (int)roundf(ofGetFrameRate()));
+		myFont.drawString(tmp, ofGetWidth() - 100, ofGetHeight() - 20);
+		ofSetColor(255);
+	}
+
 }
 
 //--------------------------------------------------------------
@@ -617,10 +653,16 @@ void ofApp::appMenuFunction(string title, bool bChecked) {
 		desktopSender.SetActiveSender("WindowSender");
 	}
 
+	if (title == "Show fps") {
+		bShowfps = bChecked;
+	}
+
 	if (title == "Show on top") {
 		bTopmost = bChecked;
 		doTopmost(bTopmost);
 	}
+
+
 
 	//
 	// Help menu
