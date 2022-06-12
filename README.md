@@ -1,6 +1,10 @@
 # SpoutCapture
 An Openframeworks screen capture application for Microsoft Windows.
 
+### VS2017 branch.
+
+This branch has project files for Visual Studio 2017 before update for Visual Studio 2022. This branch will remain as an archive and the Master branch will be updated with ongoing changes.
+
 - Captures the visible desktop at high speed using the [Desktop Duplication API](https://docs.microsoft.com/en-us/windows/win32/direct3ddxgi/desktop-dup-api).
 - Captures the region of the desktop under the application window.
 - Captures individual windows using [GDI](https://docs.microsoft.com/en-us/windows/win32/gdi/windows-gdi).
