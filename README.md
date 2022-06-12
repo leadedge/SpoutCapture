@@ -1,40 +1,28 @@
-# SpoutCapture
-An Openframeworks screen capture application for Microsoft Windows.
+# SpoutCap
+A minimal command line interface version of SpoutCapture.
 
-- Captures the visible desktop at high speed using the [Desktop Duplication API](https://docs.microsoft.com/en-us/windows/win32/direct3ddxgi/desktop-dup-api).
-- Captures the region of the desktop under the application window.
-- Captures individual windows using [GDI](https://docs.microsoft.com/en-us/windows/win32/gdi/windows-gdi).
+### comand line branch
+This project is a branch of "SpoutCapture" but is not equivalent. SpoutCapture has many more features, but the command line interface cannot be used because it disables the mouse hook. Download the entire repository when this branch is active and find "SpoutCap.exe" in the "bin" folder.
 
-Two Spout senders are created, one for the entire desktop and one for the selected region or 
-application window. A region of interest is always part of the “visible” desktop, so can be obscured by other windows.
-A window capture is independent and the selected application can be obscured without affecting the capture.
-The capture will continue if SpoutCapture is minimized. This can result in improved frame rate for 
-window capture. Details can be found in SpoutCapture.pdf. Download the package from releases.
+
+Captures a window with the nominated title.
+
+The application can be started without a command line but will do nothing. To capture a specific window use a batch file or type from a command console window started in the same folder as the executable. "aa-dos.bat" is provided to do that.
+
+SpoutCap "Title of window to capture"
+
+The application will start minimised to the taskbar. It can be restored to exit or just close from the taskbar.
+
+"aa-sender.bat" is an example that captures "Spout Demo Sender".
+
+Multiple windows acn be captured by starting more instances with the same method. Senders will be created as :
+
+"WindowSender_1", "WindowSender_2", etc.
+
+Each can be closed independently.
 
 The project depends on :  
 * ofxWinMenu - https://github.com/leadedge/ofxWinMenu  
 * Spout 2.007 - https://github.com/leadedge/Spout2/
 
-The project files are for Visual Studio 2017
-
-This program uses various techniques, all tested and working.\
-I mention this because the code could be useful for the reader.
-
-- low level mouse hook
-- transparent window
-- menu for an OpenFrameworks application with ofxWinMenu
-- openframeworks screen text with truetype font
-- add a custom icon to the task bar
-- GDI window capture
-- desktop duplication screen capture
-- use DirectX within and OpenGL application
-- draw part of a texture to an fbo
-- show tompost function
-- resources for an about dialog and version number
-- hyperlink within the about box
-- ShellExecute to open documentation
-- send DirectX texture and readback to OpenGL
-- create two senders in the same application
-
-
-
+The project files are for Visual Studio 2022
