@@ -15,10 +15,9 @@ The project depends on :
 * ofxWinMenu - https://github.com/leadedge/ofxWinMenu  
 * Spout 2.007 - https://github.com/leadedge/Spout2/
 
-The project files are for Visual Studio 2017
+The project files are for Visual Studio 2022
 
 This program uses various techniques, all tested and working.\
-I mention this because the code could be useful for the reader.
 
 - low level mouse hook
 - transparent window
