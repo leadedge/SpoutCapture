@@ -17,7 +17,7 @@ The project depends on :
 
 The project files are for Visual Studio 2022
 
-This program uses various techniques, all tested and working.\
+This program uses various techniques that may be useful for reference.
 
 - low level mouse hook
 - transparent window
