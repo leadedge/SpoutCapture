@@ -5,7 +5,7 @@
 //	Send the desktop and the part beneath the app window
 //
 //	SpoutCapture is Licensed with the LGPL3 license.
-//	Copyright(C) 2019-2021. Lynn Jarvis.
+//	Copyright(C) 2019-2024. Lynn Jarvis.
 //
 //	https://spout.zeal.co/
 //
@@ -28,6 +28,17 @@
 //				  Version 2.000
 //	04.11.21	- Test for duplication failure and retry
 //				  Version 2.001
+//	04.05.22	- SetClassLong -> SetClassLongPtr
+//	12.06.22	- Update for VS2022
+//				  VS2022 /MD x64
+//				  Version 2.002
+//	22.04.24	- Update for Openframeworks 12 and latest Spout files
+//				  Replace About dialog with SpoutMessageBox
+//				  Change from SendImage to SendTexture for window capture
+//				  Change shared texture to non-shared texture for duplication
+//				  Remove unused dlls from bin folder
+//				  VS2022 /MT x64
+//				  Version 2.003
 //
 
 #include "ofApp.h"
@@ -40,8 +51,6 @@ static int xCoord = 0;
 static int yCoord = 0;
 static HWND windowHwnd = NULL; // Window to capture
 static HWND g_hWnd = NULL; // Application window
-
-INT_PTR CALLBACK About(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
 
 //--------------------------------------------------------------
 void ofApp::setup() {
@@ -56,10 +65,10 @@ void ofApp::setup() {
 	g_hInstance = GetModuleHandle(NULL);
 
 	// Window handle used for the menu
-	g_hWnd = WindowFromDC(wglGetCurrentDC());
+	g_hWnd =  ofGetWin32Window();
 
 	// Set a custom window icon
-	SetClassLong(g_hWnd, GCLP_HICON, (LONG)LoadIconA(GetModuleHandle(NULL), MAKEINTRESOURCEA(IDI_ICON1)));
+	SetClassLongPtr(g_hWnd, GCLP_HICON, (LONG_PTR)LoadIconA(GetModuleHandle(NULL), MAKEINTRESOURCEA(IDI_ICON1)));
 
 	// Set the caption
 	ofSetWindowTitle("SpoutCapture");
@@ -145,10 +154,8 @@ void ofApp::setup() {
 	// Use DXGI_FORMAT_B8G8R8A8_UNORM because that is the same format as
 	// the Spout shared texture and is also the format of the desktop image
 	// no matter what the current display mode is. 
-	// Use a Spout function - the texture is shareable but that has no effect
-	desktopSender.spout.spoutdx.CreateSharedDX11Texture(g_d3dDevice,
-		monitorWidth, monitorHeight,
-		DXGI_FORMAT_B8G8R8A8_UNORM, &g_pDeskTexture, g_hSharehandle);
+	desktopSender.spout.spoutdx.CreateDX11Texture(g_d3dDevice,
+		monitorWidth, monitorHeight, DXGI_FORMAT_B8G8R8A8_UNORM, &g_pDeskTexture);
 
 	// Allocate a readback OpenGL texture for the desktop
 	desktopTexture.allocate(monitorWidth, monitorHeight, GL_RGBA);
@@ -178,6 +185,7 @@ void ofApp::setup() {
 	// Load a font rather than the default
 	if (!myFont.load("fonts/DejaVuSansCondensed-Bold.ttf", 14, true, true))
 		printf("ofApp error - Font not loaded\n");
+
 }
 
 bool ofApp::setupDesktopDuplication() {
@@ -282,8 +290,7 @@ bool ofApp::capture_desktop() {
 			// and create a new IDXGIOutputDuplication for the new content.
 			g_deskDupl->Release();
 			g_deskDupl = NULL;
-
-			printf("Acquire fail (0x%7X)\n", hr);
+			// printf("Acquire fail (0x%7X)\n", hr);
 		}
 		return false;
 	}
@@ -330,7 +337,7 @@ bool ofApp::capture_window(HWND hwnd)
 		SelectObject(hWindowMemDC, hWindowOld);
 		// Get the pixel data
 		GetBitmapBits(hWindowBitmap, windowWidth*windowHeight * 4, windowBuffer);
-				DeleteObject(hWindowBitmap);
+		DeleteObject(hWindowBitmap);
 		DeleteDC(hWindowMemDC);
 		ReleaseDC(NULL, hWindowDC);
 		return true;
@@ -360,15 +367,13 @@ void ofApp::exit() {
 //--------------------------------------------------------------
 void ofApp::update() {
 
-	
 	if (!bInitialized) {
 		// Create the window sender first so that the desktop sender is set as active
-		windowSender.CreateSender("WindowSender", ofGetWidth(), ofGetHeight());
+	    windowSender.CreateSender("WindowSender", ofGetWidth(), ofGetHeight());
 		// This sets up the interop device and object for WriteTextureReadBack to use
 		desktopSender.CreateSender("DesktopSender", ofGetScreenWidth(), ofGetScreenHeight());
 		bInitialized = true;
 	}
-
 
 	// Always capture using the desktop duplication method.
 	// The DirectX desktop texture is sent by capture_desktop().
@@ -377,6 +382,7 @@ void ofApp::update() {
 	capture_desktop();
 
 	if (bRegion) {
+
 		//
 		// Region - using desktop duplication capture
 		//
@@ -398,17 +404,22 @@ void ofApp::update() {
 		// Sender width and height mirror the ofApp window.
 		ofSetColor(255);
 		windowFbo.bind();
+
 		desktopTexture.drawSubsection(0, 0,
 			(float)windowWidth, // size to draw and crop
 			(float)windowHeight,
 			(float)positionLeft, // position to crop at
 			(float)positionTop);
+
 		// Send the window fbo
-		windowSender.SendFbo(windowFbo.getId(), windowFbo.getWidth(), windowFbo.getHeight());
+		// Invert because DirectX textures have origin reverse in y compared to OpenGL
+		windowSender.SendFbo(windowFbo.getId(), windowWidth, windowHeight, true);
+
 		windowFbo.unbind();
+
 	}
 	else if (bWindow) {
-		
+
 		//
 		// Window selection
 		//
@@ -484,8 +495,13 @@ void ofApp::update() {
 				windowBuffer = (unsigned char *)malloc(windowWidth*windowHeight * 4 * sizeof(unsigned char));
 			}
 			else {
-				// Send GDI pixels
-				if (bInitialized) windowSender.SendImage(windowBuffer, windowWidth, windowHeight, GL_BGRA_EXT);
+				// Send window texture, loaded from GDI pixels
+				if (bInitialized && windowTexture.isAllocated()) {
+					windowSender.SendTexture(windowTexture.getTextureData().textureID,
+						windowTexture.getTextureData().textureTarget, windowWidth, windowHeight, GL_BGRA_EXT);
+					// Can limit fps here. Typically 35-45 - hold to constant rate.
+					// windowSender.HoldFps(30);
+				}
 			}
 		}
 	}
@@ -538,7 +554,7 @@ void ofApp::draw() {
 		char tmp[64];
 		ofSetColor(255, 255, 0);
 		sprintf_s(tmp, 64, "Fps - %d", (int)roundf(ofGetFrameRate()));
-		myFont.drawString(tmp, ofGetWidth() - 100, ofGetHeight() - 20);
+		myFont.drawString(tmp, ofGetWidth() - 110, 30);
 		ofSetColor(255);
 	}
 
@@ -599,8 +615,8 @@ void ofApp::appMenuFunction(string title, bool bChecked) {
 
 		// Disable layered style
 		HWND hwnd = ofGetWin32Window();
-		DWORD dwStyle = GetWindowLong(hwnd, GWL_EXSTYLE);
-		SetWindowLong(hwnd, GWL_EXSTYLE, dwStyle ^= WS_EX_LAYERED);
+		LONG_PTR dwStyle = GetWindowLongPtrA(hwnd, GWL_EXSTYLE);
+		SetWindowLongPtrA(hwnd, GWL_EXSTYLE, dwStyle ^= WS_EX_LAYERED);
 
 	}
 
@@ -608,8 +624,8 @@ void ofApp::appMenuFunction(string title, bool bChecked) {
 
 		// Disable layered style
 		HWND hwnd = ofGetWin32Window();
-		DWORD dwStyle = GetWindowLong(hwnd, GWL_EXSTYLE);
-		SetWindowLong(hwnd, GWL_EXSTYLE, dwStyle ^= WS_EX_LAYERED);
+		LONG_PTR dwStyle = GetWindowLongPtrA(hwnd, GWL_EXSTYLE);
+		SetWindowLongPtrA(hwnd, GWL_EXSTYLE, dwStyle ^= WS_EX_LAYERED);
 
 		bWindow = true;
 		bDesktop = false;
@@ -645,7 +661,9 @@ void ofApp::appMenuFunction(string title, bool bChecked) {
 		//
 		// Set layered style
 		HWND hwnd = ofGetWin32Window();
-		SetWindowLong(hwnd, GWL_EXSTYLE, GetWindowLong(hwnd, GWL_EXSTYLE) | WS_EX_LAYERED);
+		LONG_PTR dwStyle = GetWindowLongPtrA(hwnd, GWL_EXSTYLE);
+		SetWindowLongPtrA(hwnd, GWL_EXSTYLE, dwStyle | WS_EX_LAYERED);
+
 		// Make red pixels transparent:
 		SetLayeredWindowAttributes(hwnd, RGB(255, 0, 0), 0, LWA_COLORKEY);
 
@@ -663,7 +681,6 @@ void ofApp::appMenuFunction(string title, bool bChecked) {
 	}
 
 
-
 	//
 	// Help menu
 	//
@@ -677,7 +694,45 @@ void ofApp::appMenuFunction(string title, bool bChecked) {
 	}
 
 	if (title == "About") {
-		DialogBoxA(g_hInstance, MAKEINTRESOURCEA(IDD_ABOUTBOX), g_hWnd, About);
+
+		char about[1024]{};
+		char tmp[MAX_PATH]{};
+		DWORD dwSize, dummy;
+
+		sprintf_s(about, 256, "          SpoutCapture - Version ");
+		// Get product version number
+		if (GetModuleFileNameA(NULL, tmp, MAX_PATH)) {
+			dwSize = GetFileVersionInfoSizeA(tmp, &dummy);
+			if (dwSize > 0) {
+				vector<BYTE> data(dwSize);
+				if (GetFileVersionInfoA(tmp, NULL, dwSize, &data[0])) {
+					LPVOID pvProductVersion = NULL;
+					unsigned int iProductVersionLen = 0;
+					if (VerQueryValueA(&data[0], ("\\StringFileInfo\\080904E4\\ProductVersion"), &pvProductVersion, &iProductVersionLen)) {
+						sprintf_s(tmp, MAX_PATH, "%s\n", (char*)pvProductVersion);
+						strcat_s(about, 1024, tmp);
+					}
+				}
+			}
+		}
+
+		strcat_s(about, 1024, "\n");
+		strcat_s(about, 1024, "                  <a href=\"http://spout.zeal.co\">http://spout.zeal.co</a>\n");
+		strcat_s(about, 1024, "\n");
+
+		strcat_s(about, 1024, "          High speed capture of the desktop\n");
+		strcat_s(about, 1024, "          or the part under the app window.\n");
+		strcat_s(about, 1024, "          Or capture any other window\n");
+		strcat_s(about, 1024, "          with middle mouse button click.\n");
+		// Show fps
+		sprintf_s(tmp, MAX_PATH, "          (Current capture frame rate - %d)\n\n", (int)roundf(ofGetFrameRate()));
+		strcat_s(about, 1024, tmp);
+		strcat_s(about, 1024, "          If you find SpoutCapture useful\n");
+		strcat_s(about, 1024, "          please donate to the Spout project\n\n");
+
+		SpoutMessageBoxIcon(LoadIconA(GetModuleHandle(NULL), MAKEINTRESOURCEA(IDI_ICON1)));
+		SpoutMessageBox(NULL, about, "SpoutCapture", MB_OK | MB_USERICON);
+
 	}
 
 } // end appMenuFunction
@@ -696,101 +751,14 @@ void ofApp::doTopmost(bool bTop)
 		SetWindowPos(g_hWnd, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
 		ShowWindow(g_hWnd, SW_SHOW);
 		// Reset the window that was topmost before
-		if (GetWindowLong(g_hwndForeground, GWL_EXSTYLE) & WS_EX_TOPMOST)
+		// if (GetWindowLong(g_hwndForeground, GWL_EXSTYLE) & WS_EX_TOPMOST)
+		if (GetWindowLongPtrA(g_hwndForeground, GWL_EXSTYLE) & WS_EX_TOPMOST)
 			SetWindowPos(g_hwndForeground, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
 		else
 			SetWindowPos(g_hwndForeground, HWND_TOP, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
 	}
 }
 
-
-// Message handler for About box
-INT_PTR CALLBACK About(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
-{
-	UNREFERENCED_PARAMETER(lParam);
-	char tmp[MAX_PATH];
-	char about[1024];
-	DWORD dummy, dwSize;
-	LPDRAWITEMSTRUCT lpdis;
-	HWND hwnd = NULL;
-	HCURSOR cursorHand = NULL;
-	HINSTANCE hInstance = GetModuleHandle(NULL);
-
-	switch (message) {
-
-	case WM_INITDIALOG:
-
-		sprintf_s(about, 256, "SpoutCapture - Version ");
-		// Get product version number
-		if (GetModuleFileNameA(hInstance, tmp, MAX_PATH)) {
-			dwSize = GetFileVersionInfoSizeA(tmp, &dummy);
-			if (dwSize > 0) {
-				vector<BYTE> data(dwSize);
-				if (GetFileVersionInfoA(tmp, NULL, dwSize, &data[0])) {
-					LPVOID pvProductVersion = NULL;
-					unsigned int iProductVersionLen = 0;
-					if (VerQueryValueA(&data[0], ("\\StringFileInfo\\080904E4\\ProductVersion"), &pvProductVersion, &iProductVersionLen)) {
-						sprintf_s(tmp, MAX_PATH, "%s\n", (char *)pvProductVersion);
-						strcat_s(about, 1024, tmp);
-					}
-				}
-			}
-		}
-		strcat_s(about, 1024, "\n\n");
-		strcat_s(about, 1024, "High speed capture of the desktop\n");
-		strcat_s(about, 1024, "or the part under the app window.\n");
-		strcat_s(about, 1024, "Or capture any other window\n");
-		strcat_s(about, 1024, "with middle mouse button click.\n");
-		// Show fps
-		sprintf_s(tmp, MAX_PATH, "(Current capture frame rate - %d)\n\n", (int)roundf(ofGetFrameRate()));
-		strcat_s(about, 1024, tmp);
-		strcat_s(about, 1024, "If you find SpoutCapture useful\n");
-		strcat_s(about, 1024, "please donate to the Spout project\n.");
-
-		SetDlgItemTextA(hDlg, IDC_ABOUT_TEXT, (LPCSTR)about);
-
-		//
-		// Hyperlink hand cursor
-		//
-		cursorHand = LoadCursor(NULL, IDC_HAND);
-		hwnd = GetDlgItem(hDlg, IDC_SPOUT_URL);
-		SetClassLong(hwnd, GCLP_HCURSOR, (long)cursorHand);
-
-		break;
-
-
-	case WM_DRAWITEM:
-
-		// The blue hyperlinks
-		lpdis = (LPDRAWITEMSTRUCT)lParam;
-		if (lpdis->itemID == -1) break;
-		SetTextColor(lpdis->hDC, RGB(6, 69, 173));
-		switch (lpdis->CtlID) {
-			case IDC_SPOUT_URL:
-				DrawTextA(lpdis->hDC, "https://spout.zeal.co", -1, &lpdis->rcItem, DT_LEFT);
-				break;
-			default:
-				break;
-		}
-		break;
-
-	case WM_COMMAND:
-
-		if (LOWORD(wParam) == IDC_SPOUT_URL) {
-			sprintf_s(tmp, MAX_PATH, "https://spout.zeal.co");
-			ShellExecuteA(hDlg, "open", tmp, NULL, NULL, SW_SHOWNORMAL);
-			EndDialog(hDlg, 0);
-			return (INT_PTR)TRUE;
-		}
-
-		if (LOWORD(wParam) == IDOK || LOWORD(wParam) == IDCANCEL) {
-			EndDialog(hDlg, LOWORD(wParam));
-			return (INT_PTR)TRUE;
-		}
-		break;
-	}
-	return (INT_PTR)FALSE;
-}
 
 //
 // Callback-Function for mouse hook

@@ -6,6 +6,9 @@
 #include "..\apps\SpoutGL\SpoutSender.h" // Spout 2.007 beta (subject to change)
 #include <dxgi1_2.h> // Desktop Duplication
 
+#include <shlwapi.h> // For PathRemoveFileSpecA
+#pragma comment (lib, "shlwapi.lib")
+
 class ofApp : public ofBaseApp {
 
 public:
@@ -73,4 +76,8 @@ public:
 	bool bResized = false;
 	bool bShowfps = false;
 
+	// LJ DEBUG
+	// For command line args to set the receiving sender name
+	// e.g. "SpoutCapture" "Window Title"
+	LPSTR lpCmdLine = nullptr;
 };
