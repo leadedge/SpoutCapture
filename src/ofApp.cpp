@@ -37,6 +37,7 @@
 //				  Change from SendImage to SendTexture for window capture
 //				  Change shared texture to non-shared texture for duplication
 //				  Remove unused dlls from bin folder
+//	24.04.24	- Use SendTexture if not iconic
 //				  VS2022 /MT x64
 //				  Version 2.003
 //
@@ -480,6 +481,7 @@ void ofApp::update() {
 		// GDI capture
 		//
 		if (capture_window(windowHwnd)) {
+
 			// find the current selected window position and size
 			RECT rect;
 			GetClientRect(windowHwnd, &rect);
@@ -497,9 +499,17 @@ void ofApp::update() {
 			else {
 				// Send window texture, loaded from GDI pixels
 				if (bInitialized && windowTexture.isAllocated()) {
-					windowSender.SendTexture(windowTexture.getTextureData().textureID,
-						windowTexture.getTextureData().textureTarget, windowWidth, windowHeight, GL_BGRA_EXT);
-					// Can limit fps here. Typically 35-45 - hold to constant rate.
+					if (!IsIconic(g_hWnd)) {
+						// 3 msec higher speed than SendImage to allow for loadData to texture in Draw()
+						// Total capture time is approximately the same (14-16 msec full screen window)
+						windowSender.SendTexture(windowTexture.getTextureData().textureID,
+							windowTexture.getTextureData().textureTarget, windowWidth, windowHeight, GL_BGRA_EXT);
+					}
+					else {
+						windowSender.SendImage(windowBuffer, windowWidth, windowHeight);
+					}
+					// Can limit fps here to hold a more constant rate
+					// However, 60 fps is typically achieved
 					// windowSender.HoldFps(30);
 				}
 			}
