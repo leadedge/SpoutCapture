@@ -37,7 +37,8 @@
 //				  Change from SendImage to SendTexture for window capture
 //				  Change shared texture to non-shared texture for duplication
 //				  Remove unused dlls from bin folder
-//	24.04.24	- Use SendTexture if not iconic
+//	24.04.24	- Use SendImage if iconic, SendTexture if not
+//				- SpoutLogs for errors instead of printf
 //				  VS2022 /MT x64
 //				  Version 2.003
 //
@@ -166,7 +167,7 @@ void ofApp::setup() {
 	windowHeight = (unsigned int)ofGetHeight();
 
 	// Get the starting top, left position
-	RECT rect;
+	RECT rect{};
 	GetClientRect(g_hWnd, &rect);
 	positionLeft = rect.left + GetSystemMetrics(SM_CYFRAME)*2;
 	positionTop = rect.top + GetSystemMetrics(SM_CYMENU) + GetSystemMetrics(SM_CYCAPTION) + GetSystemMetrics(SM_CYFRAME)*2;
@@ -185,7 +186,7 @@ void ofApp::setup() {
 
 	// Load a font rather than the default
 	if (!myFont.load("fonts/DejaVuSansCondensed-Bold.ttf", 14, true, true))
-		printf("ofApp error - Font not loaded\n");
+		SpoutLogWarning("ofApp error - Font not loaded");
 
 }
 
@@ -199,7 +200,7 @@ bool ofApp::setupDesktopDuplication() {
 	HRESULT hr = NULL;
 
 	if (!g_d3dDevice) {
-		// printf("setupDesktopDuplication : no device\n");
+		SpoutLogError("setupDesktopDuplication : no device");
 		return false;
 	}
 
@@ -233,7 +234,7 @@ bool ofApp::setupDesktopDuplication() {
 				hr = output1->DuplicateOutput(g_d3dDevice, &g_deskDupl);
 				/// https://msdn.microsoft.com/en-gb/library/windows/desktop/hh404600(v=vs.85).aspx
 				if (FAILED(hr)) {
-					printf("setupDesktopDuplication : DuplicateOutput failed\n");
+					SpoutLogError("setupDesktopDuplication : DuplicateOutput failed");
 					output->Release();
 					adapter->Release();
 					factory->Release();
@@ -277,7 +278,7 @@ bool ofApp::capture_desktop() {
 	hr = g_deskDupl->AcquireNextFrame(500, &FrameInfo, &DesktopResource);
 	if (FAILED(hr)) {
 		if ((hr != DXGI_ERROR_ACCESS_LOST) && (hr != DXGI_ERROR_WAIT_TIMEOUT)) {
-			printf("Failed to acquire next frame in DUPLICATIONMANAGER\n");
+			SpoutLogError("Failed to acquire next frame in DUPLICATIONMANAGER");
 		}
 		else if(hr == DXGI_ERROR_ACCESS_LOST) {
 			// DXGI_ERROR_ACCESS_LOST if the desktop duplication interface is invalid.
@@ -291,7 +292,6 @@ bool ofApp::capture_desktop() {
 			// and create a new IDXGIOutputDuplication for the new content.
 			g_deskDupl->Release();
 			g_deskDupl = NULL;
-			// printf("Acquire fail (0x%7X)\n", hr);
 		}
 		return false;
 	}
@@ -395,7 +395,7 @@ void ofApp::update() {
 
 		// We have the client rectangle dimensions, get the top, left position
 		if (!IsIconic(g_hWnd)) {
-			RECT rect;
+			RECT rect{};
 			GetWindowRect(g_hWnd, &rect);
 			positionLeft = rect.left + GetSystemMetrics(SM_CYFRAME) * 2;
 			positionTop = rect.top + GetSystemMetrics(SM_CYMENU) + GetSystemMetrics(SM_CYCAPTION) + GetSystemMetrics(SM_CYFRAME) * 2;
@@ -438,10 +438,10 @@ void ofApp::update() {
 			// If the window closes it is tested by IsWindow in capture_window
 			windowHwnd = hwnd;
 
-			char str[256];
+			char str[256]{};
 			GetWindowTextA(hwnd, str, 256);
 
-			RECT rect;
+			RECT rect{};
 			GetClientRect(hwnd, &rect);
 			// printf("Window = %s (0X%7.7X) %dx%d\n", str, PtrToUint(hwnd), rect.right - rect.left, rect.bottom - rect.top);
 
@@ -483,7 +483,7 @@ void ofApp::update() {
 		if (capture_window(windowHwnd)) {
 
 			// find the current selected window position and size
-			RECT rect;
+			RECT rect{};
 			GetClientRect(windowHwnd, &rect);
 			// Check the size and position which the user might have changed
 			unsigned int width = rect.right - rect.left;
@@ -500,8 +500,8 @@ void ofApp::update() {
 				// Send window texture, loaded from GDI pixels
 				if (bInitialized && windowTexture.isAllocated()) {
 					if (!IsIconic(g_hWnd)) {
-						// 3 msec higher speed than SendImage to allow for loadData to texture in Draw()
-						// Total capture time is approximately the same (14-16 msec full screen window)
+						// 3 msec higher speed than SendImage compensates for loadData to texture in Draw()
+						// If not iconic, capture time is approximately the same (14-16 msec full screen window)
 						windowSender.SendTexture(windowTexture.getTextureData().textureID,
 							windowTexture.getTextureData().textureTarget, windowWidth, windowHeight, GL_BGRA_EXT);
 					}
@@ -761,7 +761,6 @@ void ofApp::doTopmost(bool bTop)
 		SetWindowPos(g_hWnd, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
 		ShowWindow(g_hWnd, SW_SHOW);
 		// Reset the window that was topmost before
-		// if (GetWindowLong(g_hwndForeground, GWL_EXSTYLE) & WS_EX_TOPMOST)
 		if (GetWindowLongPtrA(g_hwndForeground, GWL_EXSTYLE) & WS_EX_TOPMOST)
 			SetWindowPos(g_hwndForeground, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
 		else
@@ -811,4 +810,6 @@ static LRESULT CALLBACK LowLevelMouseProc(int nCode, WPARAM wParam, LPARAM lPara
 	else
 		return CallNextHookEx(g_hMouseHook, nCode, wParam, lParam);
 }
+
+// ... the end
 
