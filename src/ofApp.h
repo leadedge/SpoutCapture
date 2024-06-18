@@ -62,10 +62,10 @@ public:
 	bool capture_desktop();
 	
 	// GDI capture
-	HDC hWindowDC;
-	HDC hWindowMemDC;
-	HBITMAP hWindowBitmap;
-	HBITMAP hWindowOld;
+	HDC m_hWindowDC = NULL;
+	HDC m_hWindowMemDC = NULL;
+	HBITMAP m_hWindowBitmap = NULL;
+	HBITMAP m_hWindowOld = NULL;
 	bool capture_window(HWND hwnd);
 
 	// Flags
@@ -76,7 +76,6 @@ public:
 	bool bResized = false;
 	bool bShowfps = false;
 
-	// LJ DEBUG
 	// For command line args to set the receiving sender name
 	// e.g. "SpoutCapture" "Window Title"
 	LPSTR lpCmdLine = nullptr;

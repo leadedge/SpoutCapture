@@ -41,16 +41,22 @@
 //				- SpoutLogs for errors instead of printf
 //				  VS2022 /MT x64
 //				  Version 2.003
+//	17.06.24	- Pre-allocate compatible DC and bitmap for window capture
+//				  to save 5-6 msec/frame and achieve 60fps at 1920x1080
+//				  Replace documentation pdf with messagebox.
+//				  VS2022 /MT x64
+//				  Version 2.004
 //
 
 #include "ofApp.h"
 
-// Mouse hook used to detect RH button
+// Mouse hook used to detect RH button outside the window
 static HHOOK g_hMouseHook = NULL;
 static LRESULT CALLBACK LowLevelMouseProc(int nCode, WPARAM wParam, LPARAM lParam);
 static bool bRHdown = false;
 static int xCoord = 0;
 static int yCoord = 0;
+
 static HWND windowHwnd = NULL; // Window to capture
 static HWND g_hWnd = NULL; // Application window
 
@@ -229,7 +235,7 @@ bool ofApp::setupDesktopDuplication() {
 				height = monitorInfo.rcMonitor.bottom - monitorInfo.rcMonitor.top;
 				// A process can have only one desktop duplication interface on a single desktop output;
 				// however, that process can have a desktop duplication interface for each output 
-				// that is part of the desktop.
+				// that is part of the desktop. Only use the primary monitor. Other monitors are possible.
 				output1 = reinterpret_cast<IDXGIOutput1*>(output);
 				hr = output1->DuplicateOutput(g_d3dDevice, &g_deskDupl);
 				/// https://msdn.microsoft.com/en-gb/library/windows/desktop/hh404600(v=vs.85).aspx
@@ -329,24 +335,16 @@ bool ofApp::capture_window(HWND hwnd)
 		return false;
 	}
 
-	hWindowDC = GetDC(hwnd);
-	hWindowMemDC = CreateCompatibleDC(hWindowDC);
-	hWindowBitmap = CreateCompatibleBitmap(hWindowDC, windowWidth, windowHeight);
-	if (hWindowBitmap) {
-		hWindowOld = (HBITMAP)SelectObject(hWindowMemDC, hWindowBitmap);
-		BitBlt(hWindowMemDC, 0, 0, windowWidth, windowHeight, hWindowDC, 0, 0, SRCCOPY | CAPTUREBLT);
-		SelectObject(hWindowMemDC, hWindowOld);
+	// Use pre-allocated compatible DC and bitmap
+	// Time saving 5-6 msec (total 8-9 msec/frame at at 1920x1080) for 60fps capture.
+	if (m_hWindowBitmap) {
+		m_hWindowOld = (HBITMAP)SelectObject(m_hWindowMemDC, m_hWindowBitmap);
+		BitBlt(m_hWindowMemDC, 0, 0, windowWidth, windowHeight, m_hWindowDC, 0, 0, SRCCOPY | CAPTUREBLT);
+		SelectObject(m_hWindowMemDC, m_hWindowOld);
 		// Get the pixel data
-		GetBitmapBits(hWindowBitmap, windowWidth*windowHeight * 4, windowBuffer);
-		DeleteObject(hWindowBitmap);
-		DeleteDC(hWindowMemDC);
-		ReleaseDC(NULL, hWindowDC);
+		GetBitmapBits(m_hWindowBitmap, windowWidth*windowHeight * 4, windowBuffer);
 		return true;
 	}
-
-	// hWindowBitmap failed
-	DeleteDC(hWindowMemDC);
-	ReleaseDC(NULL, hWindowDC);
 
 	return false;
 
@@ -358,10 +356,9 @@ void ofApp::exit() {
 
 	desktopSender.ReleaseSender();
 	windowSender.ReleaseSender();
-	if (g_pDeskTexture)
-		g_pDeskTexture->Release();
-	if(g_hMouseHook)
-		UnhookWindowsHookEx(g_hMouseHook);
+	if (g_hMouseHook) UnhookWindowsHookEx(g_hMouseHook);
+
+	ofExit();
 
 }
 
@@ -443,6 +440,7 @@ void ofApp::update() {
 
 			RECT rect{};
 			GetClientRect(hwnd, &rect);
+			
 			// printf("Window = %s (0X%7.7X) %dx%d\n", str, PtrToUint(hwnd), rect.right - rect.left, rect.bottom - rect.top);
 
 			// Look for Class to avoid console
@@ -450,15 +448,24 @@ void ofApp::update() {
 			if (strcmp(str, "ConsoleWindowClass") != 0) {
 				unsigned int width = rect.right - rect.left;
 				unsigned int height = rect.bottom - rect.top;
-				if (width != windowWidth || height != windowHeight) {
-					windowWidth = width;
-					windowHeight = height;
-					windowTexture.allocate(windowWidth, windowHeight, GL_RGBA);
-					if (windowBuffer) free((void *)windowBuffer);
-					windowBuffer = (unsigned char *)malloc(windowWidth*windowHeight * 4 * sizeof(unsigned char));
-					if (bInitialized)
-						windowSender.UpdateSender("WindowSender", windowWidth, windowHeight);
-				}
+				windowWidth = width;
+				windowHeight = height;
+				// Update draw texture
+				windowTexture.allocate(windowWidth, windowHeight, GL_RGBA);
+				// Update capture pixel buffer
+				if (windowBuffer) free((void*)windowBuffer);
+				windowBuffer = (unsigned char*)malloc(windowWidth*windowHeight * 4 * sizeof(unsigned char));
+				// Update sender
+				if (bInitialized) windowSender.UpdateSender("WindowSender", windowWidth, windowHeight);
+				// Pre-allocate compatibleDC and bitmap to avoid repeats (saves 5-6 msec/frame)
+				if (m_hWindowMemDC) DeleteDC(m_hWindowMemDC);
+				if (m_hWindowDC) ReleaseDC(NULL, m_hWindowDC);
+				m_hWindowDC = GetDC(hwnd);
+				m_hWindowMemDC = CreateCompatibleDC(m_hWindowDC);
+				m_hWindowBitmap = CreateCompatibleBitmap(m_hWindowDC, windowWidth, windowHeight);
+				
+				// printf("m_hWindowDC = 0x%X, m_hWindowMemDC = 0x%X,  m_hWindowBitmap = 0x%X\n",
+					// PtrToUint(m_hWindowDC), PtrToUint(m_hWindowMemDC), PtrToUint(m_hWindowBitmap));
 			}
 
 			// Re-set focus
@@ -495,22 +502,22 @@ void ofApp::update() {
 				windowTexture.allocate(windowWidth, windowHeight, GL_RGBA);
 				if (windowBuffer) free((void *)windowBuffer);
 				windowBuffer = (unsigned char *)malloc(windowWidth*windowHeight * 4 * sizeof(unsigned char));
+				// Re-size pre-allocated bitmap
+				if (m_hWindowBitmap) DeleteObject(m_hWindowBitmap);
+				m_hWindowBitmap = CreateCompatibleBitmap(m_hWindowDC, windowWidth, windowHeight);
 			}
 			else {
 				// Send window texture, loaded from GDI pixels
 				if (bInitialized && windowTexture.isAllocated()) {
 					if (!IsIconic(g_hWnd)) {
 						// 3 msec higher speed than SendImage compensates for loadData to texture in Draw()
-						// If not iconic, capture time is approximately the same (14-16 msec full screen window)
+						// If not iconic, capture time is approximately the same (8-9 msec full screen window)
 						windowSender.SendTexture(windowTexture.getTextureData().textureID,
 							windowTexture.getTextureData().textureTarget, windowWidth, windowHeight, GL_BGRA_EXT);
 					}
 					else {
 						windowSender.SendImage(windowBuffer, windowWidth, windowHeight);
 					}
-					// Can limit fps here to hold a more constant rate
-					// However, 60 fps is typically achieved
-					// windowSender.HoldFps(30);
 				}
 			}
 		}
@@ -607,7 +614,8 @@ void ofApp::appMenuFunction(string title, bool bChecked) {
 	//
 
 	if (title == "Exit") {
-		ofExit(); // Quit the application
+		// Quit the application
+		exit();
 	}
 
 	//
@@ -622,12 +630,10 @@ void ofApp::appMenuFunction(string title, bool bChecked) {
 		menu->SetPopupItem("Window", false);
 		// Set desktop sender active
 		desktopSender.SetActiveSender("DesktopSender");
-
 		// Disable layered style
 		HWND hwnd = ofGetWin32Window();
 		LONG_PTR dwStyle = GetWindowLongPtrA(hwnd, GWL_EXSTYLE);
 		SetWindowLongPtrA(hwnd, GWL_EXSTYLE, dwStyle ^= WS_EX_LAYERED);
-
 	}
 
 	if (title == "Window") {
@@ -645,6 +651,7 @@ void ofApp::appMenuFunction(string title, bool bChecked) {
 		menu->SetPopupItem("Window", false);
 
 		// Always select a new window to capture
+		// Compatible bitmap is re-created
 		windowHwnd = nullptr;
 
 		// clear buffer to grey
@@ -659,11 +666,20 @@ void ofApp::appMenuFunction(string title, bool bChecked) {
 	}
 
 	if (title == "Region") {
+
 		bRegion = true;
 		bDesktop = false;
 		bWindow = false;
 		menu->SetPopupItem("Desktop", false);
 		menu->SetPopupItem("Window", false);
+
+		// Release window capture objects
+		if (m_hWindowBitmap) DeleteObject(m_hWindowBitmap);
+		if (m_hWindowMemDC) DeleteDC(m_hWindowMemDC);
+		if (m_hWindowDC) ReleaseDC(NULL, m_hWindowDC);
+		m_hWindowBitmap = NULL;
+		m_hWindowMemDC = NULL;
+		m_hWindowDC = NULL;
 
 		//
 		// Create a transparent window
@@ -690,17 +706,36 @@ void ofApp::appMenuFunction(string title, bool bChecked) {
 		doTopmost(bTopmost);
 	}
 
-
 	//
 	// Help menu
 	//
 	if (title == "Documentation") {
-		char path[MAX_PATH];
-		HMODULE hModule = GetModuleHandle(NULL);
-		GetModuleFileNameA(hModule, path, MAX_PATH);
-		PathRemoveFileSpecA(path);
-		strcat_s(path, MAX_PATH, "\\SpoutCapture.pdf");
-		ShellExecuteA(g_hWnd, "open", path, NULL, NULL, SW_SHOWNORMAL);
+
+		std::string doc = "\"SpoutCapture\" captures the visible desktop, the region ";
+		doc += "of the desktop under the window or independent application windows. ";
+		doc += "Two Spout senders are created, \"DesktopSender\" for the entire desktop and \"WindowSender\" for the selected region or ";
+		doc += "the selected window.\n\n";
+
+		doc += "\"Capture Desktop\"\n\n";
+		doc += "Captures the whole desktop using DirectX \"desktop duplication\" methods and ";
+		doc += "is received as \"DesktopSender\". ";
+		doc += "SpoutCapture starts with display of the desktop capture.\n\n";
+		doc += "\"Capture Region\"\n\nCaptures the region of the desktop under the SpoutCapture window. ";
+		doc += "and is received as \"WindowSender\". ";
+		doc += "The window is made transparent to allow capture of the desktop beneath. ";
+		doc += "Position and stretch it to cover the part of the desktop required. ";
+		doc += "When moved or re-sized, the window sender is updated to the new part of the desktop.\n\n";
+		
+		doc += "\"Capture Window\"\n\nCaptures individual application windows using Win32 \"GDI\" methods. ";
+		doc += "Click anywhere on an application window with the MIDDLE mouse button. ";
+		doc += "The window capture is received as \"SpoutWindow\" instead ";
+		doc += "of the selected region of interest.\n\n";
+		doc += "A region of interest is part of the \"visible\" desktop and can be obscured by other windows. ";
+		doc += "whereas a captured window can be obscured without affecting the capture. ";
+		doc += "All captures continue if SpoutCapture is minimized.\n\n";
+
+		SpoutMessageBoxIcon(LoadIconA(GetModuleHandle(NULL), MAKEINTRESOURCEA(IDI_ICON1)));
+		SpoutMessageBox(NULL, doc.c_str(), " ", MB_OK | MB_USERICON, "SpoutCapture");
 	}
 
 	if (title == "About") {
@@ -729,14 +764,9 @@ void ofApp::appMenuFunction(string title, bool bChecked) {
 		strcat_s(about, 1024, "\n");
 		strcat_s(about, 1024, "                  <a href=\"http://spout.zeal.co\">http://spout.zeal.co</a>\n");
 		strcat_s(about, 1024, "\n");
-
-		strcat_s(about, 1024, "          High speed capture of the desktop\n");
-		strcat_s(about, 1024, "          or the part under the app window.\n");
-		strcat_s(about, 1024, "          Or capture any other window\n");
-		strcat_s(about, 1024, "          with middle mouse button click.\n");
-		// Show fps
-		sprintf_s(tmp, MAX_PATH, "          (Current capture frame rate - %d)\n\n", (int)roundf(ofGetFrameRate()));
-		strcat_s(about, 1024, tmp);
+		strcat_s(about, 1024, "          Capture the desktop or the region under\n");
+		strcat_s(about, 1024, "          the app window, or any other window\n");
+		strcat_s(about, 1024, "          with middle mouse button click.\n\n");
 		strcat_s(about, 1024, "          If you find SpoutCapture useful\n");
 		strcat_s(about, 1024, "          please donate to the Spout project\n\n");
 

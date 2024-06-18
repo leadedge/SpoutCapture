@@ -18,8 +18,8 @@ IDI_ICON1          ICON           ".\\Spout.ico"
 //
 LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_US
 VS_VERSION_INFO VERSIONINFO
-    FILEVERSION     2,0,0,3
-    PRODUCTVERSION  2,0,0,3
+    FILEVERSION     2,0,0,4
+    PRODUCTVERSION  2,0,0,4
     FILEOS          VOS_NT
     FILETYPE        VFT_APP
     FILESUBTYPE     VFT2_UNKNOWN
@@ -32,12 +32,12 @@ VS_VERSION_INFO VERSIONINFO
         {
             VALUE "CompanyName", "Leading Edge Pty Ltd\0"
             VALUE "FileDescription", "SpoutCapture\0"
-            VALUE "FileVersion", "2.003\0"
+            VALUE "FileVersion", "2.004\0"
             VALUE "InternalName", "SpoutCapture\0"
             VALUE "LegalCopyright", "Copyright \251 Leading Edge Pty Ltd 2019-2024\0"
             VALUE "OriginalFilename", "SpoutCapture.exe\0"
             VALUE "ProductName", "SpoutCapture\0"
-            VALUE "ProductVersion", "2.003\0"
+            VALUE "ProductVersion", "2.004\0"
         }
     }
     BLOCK "VarFileInfo"

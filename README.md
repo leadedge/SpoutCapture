@@ -8,8 +8,7 @@ An Openframeworks screen capture application for Microsoft Windows.
 Two Spout senders are created, one for the entire desktop and one for the selected region or 
 application window. A region of interest is always part of the “visible” desktop, so can be obscured by other windows.
 Window capture is independent and the selected application can be obscured without affecting the capture.
-The capture continues if SpoutCapture is minimized. Details can be found in SpoutCapture.pdf. 
-Download the package from releases.
+The capture continues if SpoutCapture is minimized. Download the package from releases.
 
 The project depends on :  
 * ofxWinMenu - https://github.com/leadedge/ofxWinMenu  
@@ -31,7 +30,6 @@ This program uses various techniques that may be useful for reference.
 - show tompost function
 - resources for an about dialog and version number
 - hyperlink within the about box
-- ShellExecute to open documentation
 - send DirectX texture and readback to OpenGL
 - create two senders in the same application
 
