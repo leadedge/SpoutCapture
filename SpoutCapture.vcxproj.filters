@@ -40,24 +40,6 @@
     <ClCompile Include="..\..\SpoutGL\SpoutUtils.cpp">
       <Filter>SpoutGL</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\..\addons\ofxNDI\src\ofxNDIdynloader.cpp">
-      <Filter>addons\ofxNIDI</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\..\addons\ofxNDI\src\ofxNDIreceive.cpp">
-      <Filter>addons\ofxNIDI</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\..\addons\ofxNDI\src\ofxNDIreceiver.cpp">
-      <Filter>addons\ofxNIDI</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\..\addons\ofxNDI\src\ofxNDIsend.cpp">
-      <Filter>addons\ofxNIDI</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\..\addons\ofxNDI\src\ofxNDIsender.cpp">
-      <Filter>addons\ofxNIDI</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\..\addons\ofxNDI\src\ofxNDIutils.cpp">
-      <Filter>addons\ofxNIDI</Filter>
-    </ClCompile>
     <ClCompile Include="..\..\..\addons\ofxWinMenu\src\ofxWinMenu.cpp">
       <Filter>addons\ofxWinMenu</Filter>
     </ClCompile>
@@ -74,9 +56,6 @@
     </Filter>
     <Filter Include="SpoutGL">
       <UniqueIdentifier>{c7216696-81e8-4504-ae41-8d67662f5493}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="addons\ofxNIDI">
-      <UniqueIdentifier>{5990a384-0c33-4940-b147-1ddfc0d405e9}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>
@@ -122,30 +101,6 @@
     <ClInclude Include="..\..\SpoutGL\SpoutUtils.h">
       <Filter>SpoutGL</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\..\addons\ofxNDI\src\ofxNDI.h">
-      <Filter>addons\ofxNIDI</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\..\addons\ofxNDI\src\ofxNDIdynloader.h">
-      <Filter>addons\ofxNIDI</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\..\addons\ofxNDI\src\ofxNDIplatforms.h">
-      <Filter>addons\ofxNIDI</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\..\addons\ofxNDI\src\ofxNDIreceive.h">
-      <Filter>addons\ofxNIDI</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\..\addons\ofxNDI\src\ofxNDIreceiver.h">
-      <Filter>addons\ofxNIDI</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\..\addons\ofxNDI\src\ofxNDIsend.h">
-      <Filter>addons\ofxNIDI</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\..\addons\ofxNDI\src\ofxNDIsender.h">
-      <Filter>addons\ofxNIDI</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\..\addons\ofxNDI\src\ofxNDIutils.h">
-      <Filter>addons\ofxNIDI</Filter>
-    </ClInclude>
     <ClInclude Include="..\..\..\addons\ofxWinMenu\src\ofxWinMenu.h">
       <Filter>addons\ofxWinMenu</Filter>
     </ClInclude>
@@ -155,5 +110,8 @@
     <ResourceCompile Include="src\resource.rc">
       <Filter>src</Filter>
     </ResourceCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="packages.config" />
   </ItemGroup>
 </Project>

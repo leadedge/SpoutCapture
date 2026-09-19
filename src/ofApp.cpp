@@ -5,7 +5,7 @@
 //	Send the desktop and the part beneath the app window
 //
 //	SpoutCapture is Licensed with the LGPL3 license.
-//	Copyright(C) 2019-2024. Lynn Jarvis.
+//	Copyright(C) 2019-2026. Lynn Jarvis.
 //
 //	https://spout.zeal.co/
 //
@@ -46,6 +46,15 @@
 //				  Replace documentation pdf with messagebox.
 //				  VS2022 /MT x64
 //				  Version 2.004
+//	10.08.26	- Add external video recorder program "SpoutRecorder.exe"
+//				  Revise wait procedure for CreateProcess
+//				  to activate the recorder dialog program
+//	12.08.26	- Grey rectangle under fps text
+//	17.09.26	- Add Window > Copy (clipboard image copy)
+//				  Add F5 hot key for clipboard copy
+//	19.09.26	  Remove Vcpkg : Properties > Configuration > Vcpkg > Use Vcpkg NO
+//				  /MT build, GitHub update and release
+//				  Version 2.005
 //
 
 #include "ofApp.h"
@@ -63,9 +72,13 @@ static HWND g_hWnd = NULL; // Application window
 //--------------------------------------------------------------
 void ofApp::setup() {
 
-	// For debugging
-	// OpenSpoutConsole(); // empty console
-	// EnableSpoutLog(); // Error messages
+	// Empty console for debugging
+	// Executable name and disabled close button
+	// OpenSpoutConsole(nullptr, true);
+
+	// Console error messages
+	// EnableSpoutLog();
+
 	// Enable a log file in ..\AppData\Roaming\Spout
 	// EnableSpoutLogFile("SpoutCapture");
 
@@ -89,8 +102,17 @@ void ofApp::setup() {
 	// Centre on the screen
 	ofSetWindowPosition((ofGetScreenWidth() - width) / 2, (ofGetScreenHeight() - height) / 2);
 
-	// Disable escape key exit
-	ofSetEscapeQuitsApp(false);
+	// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+	// Disable keys that close the application window
+	// For an Openframeworks application, Escape to quit is default
+	// It can be disabled using : ofSetEscapeQuitsApp(false);
+
+	// However, Alt-F4 is still detected and closes the application
+	// Both Escape and Alt-F4 are disabled by :
+	EnableWindowClose(g_hWnd, false);
+
+	// The system menu 'X' button can also be disabled :
+	// EnableWindowClose(g_hWnd, false, false);
 
 	//
 	// Create a menu using ofxWinMenu
@@ -112,6 +134,7 @@ void ofApp::setup() {
 	// File popup
 	//
 	HMENU hPopup = menu->AddPopupMenu(hMenu, "File");
+	menu->AddPopupItem(hPopup, "Recorder", false, false);
 	menu->AddPopupItem(hPopup, "Exit", false, false);
 
 	//
@@ -123,6 +146,7 @@ void ofApp::setup() {
 	menu->AddPopupItem(hPopup, "Region", false); // Not checked and auto-check
 	menu->AddPopupItem(hPopup, "Window", false); // Not checked and auto-check
 	menu->AddPopupSeparator(hPopup);
+	menu->AddPopupItem(hPopup, "Copy - F5", false, false);
 	menu->AddPopupItem(hPopup, "Show fps", false); // Not checked and auto-check
 	menu->AddPopupItem(hPopup, "Show on top", false); // Not checked and auto-check
 	bDesktop = true;
@@ -139,6 +163,10 @@ void ofApp::setup() {
 
 	// Set the menu to the window
 	menu->SetWindowMenu();
+
+	// Set hot key F5 - copy image to clipboard
+	// Use F5 here because F12 is reserved for use by the debugger
+	SetHotKey(g_hWnd, VK_F5);
 
 	// Initialize for DirectX11 now which creates a Direct3D 11 device.
 	desktopSender.SetDX9(false); // Set this here because DX9 won't work
@@ -259,7 +287,6 @@ bool ofApp::setupDesktopDuplication() {
 	return true;
 }
 
-
 //
 // Desktop duplication method to capture the entire desktop
 //
@@ -328,6 +355,7 @@ bool ofApp::capture_desktop() {
 
 }
 
+
 bool ofApp::capture_window(HWND hwnd)
 {
 	// Closed window or self
@@ -336,18 +364,39 @@ bool ofApp::capture_window(HWND hwnd)
 	}
 
 	// Use pre-allocated compatible DC and bitmap
-	// Time saving 5-6 msec (total 8-9 msec/frame at at 1920x1080) for 60fps capture.
+	// Time saving 5-6 msec
+	// (total 8-9 msec/frame at at 1920x1080) for 60fps capture.
 	if (m_hWindowBitmap) {
 		m_hWindowOld = (HBITMAP)SelectObject(m_hWindowMemDC, m_hWindowBitmap);
-		BitBlt(m_hWindowMemDC, 0, 0, windowWidth, windowHeight, m_hWindowDC, 0, 0, SRCCOPY | CAPTUREBLT);
+		// SRCCOPY | CAPTUREBLT causes cursor flicker
+		BitBlt(m_hWindowMemDC, 0, 0, windowWidth, windowHeight, m_hWindowDC, 0, 0, SRCCOPY);
 		SelectObject(m_hWindowMemDC, m_hWindowOld);
 		// Get the pixel data
-		GetBitmapBits(m_hWindowBitmap, windowWidth*windowHeight * 4, windowBuffer);
+		GetBitmapBits(m_hWindowBitmap, windowWidth*windowHeight*4, windowBuffer);
+		// Set alpha opaque
+		unsigned char* p = windowBuffer+3; // Start at alpha
+		const int pixelCount = windowWidth*windowHeight;
+		for (int i=0; i<pixelCount; i++) {
+			*p = 255; p += 4;
+		}
 		return true;
 	}
-
 	return false;
+}
 
+
+
+//--------------------------------------------------------------
+// Set hotkey (available outside application focus)
+void ofApp::SetHotKey(HWND hwnd, unsigned int key)
+{
+	RegisterHotKey(hwnd, 1, MOD_NOREPEAT, key);
+}
+
+//--------------------------------------------------------------
+void ofApp::ClearHotKeys()
+{
+	UnregisterHotKey(NULL, 1);
 }
 
 
@@ -357,6 +406,15 @@ void ofApp::exit() {
 	desktopSender.ReleaseSender();
 	windowSender.ReleaseSender();
 	if (g_hMouseHook) UnhookWindowsHookEx(g_hMouseHook);
+
+	// Close the recorder window
+	// Use the window class because the caption can change if recording
+	HWND hwnd = FindWindowA("ofxWinDialogClass", NULL);
+	if(hwnd)
+		PostMessage(hwnd, WM_DESTROY, 0, 0L);
+
+	// Clear hot keys (F12)
+	ClearHotKeys();
 
 	ofExit();
 
@@ -438,16 +496,28 @@ void ofApp::update() {
 			char str[256]{};
 			GetWindowTextA(hwnd, str, 256);
 
+			// Client size
 			RECT rect{};
 			GetClientRect(hwnd, &rect);
-			
-			// printf("Window = %s (0X%7.7X) %dx%d\n", str, PtrToUint(hwnd), rect.right - rect.left, rect.bottom - rect.top);
-
+			unsigned int width = rect.right - rect.left;
+			unsigned int height = rect.bottom - rect.top;
 			// Look for Class to avoid console
 			GetClassNameA(hwnd, str, 256);
 			if (strcmp(str, "ConsoleWindowClass") != 0) {
-				unsigned int width = rect.right - rect.left;
-				unsigned int height = rect.bottom - rect.top;
+				// Window width must be a multiple of 2 for FFmpeg
+				RECT rw{};
+				GetWindowRect(hwnd, &rw);
+				unsigned int ww = rw.right - rw.left;
+				unsigned int wh = rw.bottom - rw.top;
+				unsigned int w = (ww/2)*2;
+				if (w != ww) {
+					// Set a new window width
+					SetWindowPos(hwnd, NULL, 0, 0, w, wh, SWP_NOMOVE);
+					// Get the final client size
+					GetClientRect(hwnd, &rw);
+					width = rw.right - rw.left;
+					height = rw.bottom - rw.top;
+				}
 				windowWidth = width;
 				windowHeight = height;
 				// Update draw texture
@@ -463,9 +533,7 @@ void ofApp::update() {
 				m_hWindowDC = GetDC(hwnd);
 				m_hWindowMemDC = CreateCompatibleDC(m_hWindowDC);
 				m_hWindowBitmap = CreateCompatibleBitmap(m_hWindowDC, windowWidth, windowHeight);
-				
-				// printf("m_hWindowDC = 0x%X, m_hWindowMemDC = 0x%X,  m_hWindowBitmap = 0x%X\n",
-					// PtrToUint(m_hWindowDC), PtrToUint(m_hWindowMemDC), PtrToUint(m_hWindowBitmap));
+
 			}
 
 			// Re-set focus
@@ -513,7 +581,8 @@ void ofApp::update() {
 						// 3 msec higher speed than SendImage compensates for loadData to texture in Draw()
 						// If not iconic, capture time is approximately the same (8-9 msec full screen window)
 						windowSender.SendTexture(windowTexture.getTextureData().textureID,
-							windowTexture.getTextureData().textureTarget, windowWidth, windowHeight, GL_BGRA_EXT);
+							windowTexture.getTextureData().textureTarget,
+							windowWidth, windowHeight, false); // No invert for bitmap
 					}
 					else {
 						windowSender.SendImage(windowBuffer, windowWidth, windowHeight);
@@ -546,7 +615,6 @@ void ofApp::draw() {
 		// GDI capture
 		//
 		ofBackground(128); // Grey for no capture
-
 		if (windowHwnd && windowBuffer) {
 			windowTexture.loadData((const unsigned char *)windowBuffer, windowWidth, windowHeight, GL_BGRA_EXT);
 			windowTexture.draw(0, 0, ofGetWidth(), ofGetHeight());
@@ -568,10 +636,16 @@ void ofApp::draw() {
 
 	// Capture frame rate display
 	if (bShowfps) {
+		
 		char tmp[64];
-		ofSetColor(255, 255, 0);
 		sprintf_s(tmp, 64, "Fps - %d", (int)roundf(ofGetFrameRate()));
-		myFont.drawString(tmp, ofGetWidth() - 110, 30);
+		// Grey rectangle under the text
+		ofSetColor(128);
+		ofRectangle rf = myFont.getStringBoundingBox(tmp, 0, 0);
+		ofDrawRectRounded(ofGetWidth()-114, 30-rf.getHeight(), rf.getWidth()+8, rf.getHeight()+4, 4.0);
+		// Yellow bold text
+		ofSetColor(255, 255, 0);
+		myFont.drawString(tmp, ofGetWidth()-110, 30);
 		ofSetColor(255);
 	}
 
@@ -607,11 +681,125 @@ void ofApp::windowResized(int w, int h) {
 // This function is called by ofxWinMenu when an item is selected.
 // The the title and state can be checked for required action.
 // 
-void ofApp::appMenuFunction(string title, bool bChecked) {
+void ofApp::appMenuFunction(string title, bool bChecked)
+{
+	// Handle recorder menu item
+	if (title == "WM_ENTERMENULOOP") {
+		if(FindWindowA("ofxWinDialogClass", NULL))
+			menu->SetPopupItem("Recorder", true);
+		else
+			menu->SetPopupItem("Recorder", false);
+	}
+
+	// Handle hot keys
+	if (title.rfind("WM_HOTKEY|", 0) == 0) {
+		WPARAM wParam = std::stoull(title.substr(10), nullptr, 16);
+		// wParam is the registered number of the hot key
+		// In this case only one key is registered (F5)
+		if (wParam == 1) {
+			appMenuFunction("Copy - F5", false);
+		}
+	}
 
 	//
 	// File menu
 	//
+	// Activate the recorder dialog program
+	if (title == "Recorder") {
+
+		// Use the window class because the caption can change if recording
+		HWND hwnd = FindWindowA("ofxWinDialogClass", NULL);
+		if (!hwnd) {
+
+			// Get path to FFmpeg
+			std::string FFmpegPath = GetExePath();
+			FFmpegPath += "DATA\\FFMPEG\\ffmpeg.exe";
+			// Check for FFmpeg
+			if (_access(FFmpegPath.c_str(), 0) == -1) {
+				std::string msg = "\"FFmpeg\" is required for the recorder\n\n";
+				msg += "Go to <a href=\"https://github.com/GyanD/codexffmpeg/releases/\">https://github.com/GyanD/codexffmpeg/releases/</a>\n\n";
+				msg += " * Open the \"Assets\" pane.\n";
+				msg += " * Choose the \"Essentials\" build zip file.\n";
+				msg += "    e.g. \"ffmpeg-2026-06-10-git-b29bdd3715-essentials_build.zip\"\n";
+				msg += " * Download the archive to any convenient folder.\n";
+				msg += " * Unzip and copy \"ffmpeg.exe\" from the \"bin\\\" archive folder\n";
+				msg += "    to the application data folder : \"\\data\\ffmpeg\\\"\n\n";
+				msg += "Do you want to download it now?\n\n";
+				if (SpoutMessageBox(g_hWnd, msg.c_str(), "Warning", MB_YESNO | MB_ICONWARNING | MB_TOPMOST) == IDYES) {
+					ShellExecuteA(NULL, "open", "https://github.com/GyanD/codexffmpeg/releases/", 0, 0, SW_SHOWNORMAL);
+				}
+				return;
+			}
+
+			std::string str = GetExePath();
+			str += "SpoutRecorder.exe";
+
+			// Host window handle for the "Hide window" option
+			// and to position the Recorder window
+			std::string args = " -hwnd ";
+			args += std::to_string(PtrToUint(ofGetWin32Window()));
+			// TODO
+			/*
+			// Sender name if receiving
+			args += " -sender ";
+			args += "\"";
+			args += receiver.GetSenderName();
+			args += "\"";
+			*/
+			DWORD dwExitCode = 0; // Exit code when process terminates
+			bool bRet = false;
+			STARTUPINFOA si{};
+			si.cb = sizeof(STARTUPINFO);
+			PROCESS_INFORMATION pi{};
+			SetCursor(LoadCursor(NULL, IDC_WAIT));
+			if (CreateProcessA((LPCSTR)str.c_str(), (LPSTR)args.c_str(),
+				NULL, NULL, FALSE, 0, NULL, NULL, &si, &pi)) {
+				// Wait for CreateProcess to finish (entered an input-idle state)
+				if (pi.hProcess) {
+					if (WaitForInputIdle(pi.hProcess, 10000) == 0) { // 10 seconds timeout
+						// The process has initialized if 0 is returned.
+						// Otherwise timeout or failure.
+						bRet = true;
+					}
+				}
+				if (pi.hProcess) CloseHandle(pi.hProcess);
+				if (pi.hThread) CloseHandle(pi.hThread);
+			}
+			else {
+				SpoutMessageBox("CreateProcess failed");
+				bRet = false;
+			}
+
+			// Get the recorder window handle again
+			if (bRet) {
+				// If the process opened successfully,
+				// get the recorder dialog window handle.
+				StartTiming(); // For timeout
+				hwndRecorder = nullptr;
+				do {
+					hwndRecorder = FindWindowA(NULL, "SpoutRecorder");
+					Sleep(10);
+					if (hwndRecorder)
+						break;
+				} while (EndTiming() < 2000); // 2 second timeout
+			}
+
+			if (!hwndRecorder) {
+				SpoutMessageBox(NULL, "Could not find window", "SpoutRecorder", MB_OK | MB_ICONWARNING);
+				menu->SetPopupItem("Recorder", false);
+			}
+			else {
+				// Set focus back to the host
+				SetWindowPos(g_hWnd, NULL, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW);
+				menu->SetPopupItem("Recorder", true);
+			}
+
+		}
+		else {
+			SendMessageA(hwnd, WM_CLOSE, 0, 0L);
+			menu->SetPopupItem("Recorder", false);
+		}
+	} // end Recorder
 
 	if (title == "Exit") {
 		// Quit the application
@@ -697,6 +885,47 @@ void ofApp::appMenuFunction(string title, bool bChecked) {
 		desktopSender.SetActiveSender("WindowSender");
 	}
 
+	if (title == "Copy - F5") {
+		// windowBuffer (window)
+		// windowFbo (region)
+		// desktopTexture (desktop)
+		ofPixels myPixels;
+		unsigned int w = 0;
+		unsigned int h = 0;
+		bool bRet = false;
+		if (bWindow) {
+			w = windowWidth;
+			h = windowHeight;
+			myPixels.allocate(w, h, OF_IMAGE_COLOR_ALPHA);
+			myPixels.setFromExternalPixels(windowBuffer, w, h, 4);
+			bRet = CopyToClipBoard(g_hWnd, myPixels.getData(), GL_RGBA, w, h);
+		}
+		else if (bRegion) {
+			w = (unsigned int)windowFbo.getWidth();
+			h = (unsigned int)windowFbo.getHeight();
+			windowFbo.readToPixels(myPixels);
+		}
+		else {
+			w = monitorWidth;
+			h = monitorHeight;
+			// Get pixels from desktopTexture (openGL texture)
+			desktopTexture.readToPixels(myPixels);
+		}
+		if (w > 0 && h > 0) {
+			myPixels.setImageType(OF_IMAGE_COLOR_ALPHA);
+			// Flip image data for clipboard DIB
+			windowSender.spout.spoutcopy.FlipBuffer((unsigned char *)myPixels.getData(), w, h, GL_RGBA);
+			bRet = CopyToClipBoard(g_hWnd, myPixels.getData(), GL_RGBA, w, h);
+		}
+		myPixels.clear();
+		if (bRet) {
+			SpoutMessageBox(g_hWnd, "Image copied to the clipboard", "Information", MB_OK | MB_ICONINFORMATION | MB_TOPMOST, 1200);
+		}
+		else {
+			SpoutMessageBox(g_hWnd, "Error copying image to the clipboard", "Warning", MB_OK | MB_ICONWARNING | MB_TOPMOST);
+		}
+	}
+
 	if (title == "Show fps") {
 		bShowfps = bChecked;
 	}
@@ -715,24 +944,30 @@ void ofApp::appMenuFunction(string title, bool bChecked) {
 		doc += "of the desktop under the window or independent application windows. ";
 		doc += "Two Spout senders are created, \"DesktopSender\" for the entire desktop and \"WindowSender\" for the selected region or ";
 		doc += "the selected window.\n\n";
-
-		doc += "\"Capture Desktop\"\n\n";
+		doc += "\"File > Recorder\n";
+		doc += "Opens the video recorder program to enable recording of the capture.\n\n";
+		doc += "\"Capture > Desktop\"\n\n";
 		doc += "Captures the whole desktop using DirectX \"desktop duplication\" methods and ";
 		doc += "is received as \"DesktopSender\". ";
 		doc += "SpoutCapture starts with display of the desktop capture.\n\n";
-		doc += "\"Capture Region\"\n\nCaptures the region of the desktop under the SpoutCapture window. ";
+		doc += "\"Capture > Region\"\n\nCaptures the region of the desktop under the SpoutCapture window. ";
 		doc += "and is received as \"WindowSender\". ";
 		doc += "The window is made transparent to allow capture of the desktop beneath. ";
 		doc += "Position and stretch it to cover the part of the desktop required. ";
 		doc += "When moved or re-sized, the window sender is updated to the new part of the desktop.\n\n";
 		
-		doc += "\"Capture Window\"\n\nCaptures individual application windows using Win32 \"GDI\" methods. ";
+		doc += "\"Capture > Window\"\n\nCaptures individual application windows using Win32 \"GDI\" methods. ";
 		doc += "Click anywhere on an application window with the MIDDLE mouse button. ";
 		doc += "The window capture is received as \"SpoutWindow\" instead ";
 		doc += "of the selected region of interest.\n\n";
 		doc += "A region of interest is part of the \"visible\" desktop and can be obscured by other windows. ";
 		doc += "whereas a captured window can be obscured without affecting the capture. ";
 		doc += "All captures continue if SpoutCapture is minimized.\n\n";
+
+		doc += "\"Capture > Copy - F5\"\n\nCopy the current capture mode image to the clipboard.\n";
+		doc += "F5 is a 'hot-key' and is detected even if the application window does not have focus\n";
+		doc += "or is minimized. The image stays in memory until some other application copies to\n";
+		doc += "the clipboard.\n\n";
 
 		SpoutMessageBoxIcon(LoadIconA(GetModuleHandle(NULL), MAKEINTRESOURCEA(IDI_ICON1)));
 		SpoutMessageBox(NULL, doc.c_str(), " ", MB_OK | MB_USERICON, "SpoutCapture");
@@ -768,7 +1003,7 @@ void ofApp::appMenuFunction(string title, bool bChecked) {
 		strcat_s(about, 1024, "          the app window, or any other window\n");
 		strcat_s(about, 1024, "          with middle mouse button click.\n\n");
 		strcat_s(about, 1024, "          If you find SpoutCapture useful\n");
-		strcat_s(about, 1024, "          please donate to the Spout project\n\n");
+		strcat_s(about, 1024, "          please <a href=\"https://www.paypal.com/cgi-bin/webscr?cmd=_s-xclick&hosted_button_id=P4P4QJZBT87PJ\">donate</a> to the Spout project\n\n");
 
 		SpoutMessageBoxIcon(LoadIconA(GetModuleHandle(NULL), MAKEINTRESOURCEA(IDI_ICON1)));
 		SpoutMessageBox(NULL, about, "SpoutCapture", MB_OK | MB_USERICON);
@@ -840,6 +1075,7 @@ static LRESULT CALLBACK LowLevelMouseProc(int nCode, WPARAM wParam, LPARAM lPara
 	else
 		return CallNextHookEx(g_hMouseHook, nCode, wParam, lParam);
 }
+
 
 // ... the end
 

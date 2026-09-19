@@ -41,6 +41,7 @@ public:
 
 	// Screen draw font
 	ofTrueTypeFont myFont;
+	ofTrueTypeFont myFontBold;
 
 	// Menu
 	HWND g_hwndForeground = NULL;
@@ -49,6 +50,9 @@ public:
 	void appMenuFunction(string title, bool bChecked);
 	bool bTopmost = false;
 	void doTopmost(bool bTop);
+	// Video recorder
+	bool bRecording   = false;
+	HWND hwndRecorder = nullptr;
 
 	// Desktop duplication
 	ID3D11Device* g_d3dDevice = NULL;
@@ -76,7 +80,12 @@ public:
 	bool bResized = false;
 	bool bShowfps = false;
 
+	// Functions for hot keys
+	void SetHotKey(HWND hwnd, unsigned int key);
+	void ClearHotKeys();
+
 	// For command line args to set the receiving sender name
 	// e.g. "SpoutCapture" "Window Title"
 	LPSTR lpCmdLine = nullptr;
+
 };
