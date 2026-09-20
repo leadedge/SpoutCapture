@@ -4,6 +4,8 @@ An Openframeworks screen capture application for Microsoft Windows.
 - Captures the visible desktop at high speed using the [Desktop Duplication API](https://docs.microsoft.com/en-us/windows/win32/direct3ddxgi/desktop-dup-api).
 - Captures the region of the desktop under the application window.
 - Captures individual windows using [GDI](https://docs.microsoft.com/en-us/windows/win32/gdi/windows-gdi).
+- External video recorder program "SpoutRecorder.exe"
+- F5 hot key for clipboard image copy
 
 Two Spout senders are created, one for the entire desktop and one for the selected region or 
 application window. A region of interest is always part of the “visible” desktop, so can be obscured by other windows.
@@ -33,5 +35,18 @@ This program uses various techniques that may be useful for reference.
 - send DirectX texture and readback to OpenGL
 - create two senders in the same application
 
+### Compiling
 
+The project is for Openframeworks and the folder structure must be :
+
+Openframeworks\
+&emsp;Addons\
+&emsp;&emsp;ofxWinMenu\
+&emsp;Apps\
+&emsp;&emsp;MyApps\
+&emsp;&emsp;&emsp;SpoutCapture\
+&emsp;&emsp;&emsp;&emsp;src\
+&emsp;&emsp;&emsp;&emsp;bin
+        
+        
 
